@@ -62,7 +62,7 @@ class POSTCache:
             self.cache_c.execute("select ROWID, request_body from postcache ORDER BY ROWID ASC limit {0}".format(limit))
             rows = self.cache_c.fetchall()
             if(len(rows) > 0):
-                max_row_id = rows[0][0]
+                max_row_id = rows[-1][0]
                 payload = {}
                 payload.update(self.post_cache.top_level_attributes)
                 payload["lines"] = [json.loads(row[1]) for row in rows]
