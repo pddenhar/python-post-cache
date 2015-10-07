@@ -28,6 +28,9 @@ class POSTCache:
         self.cache_c = self.cache_conn.cursor()
         self.cache_c.execute("CREATE TABLE if not exists postcache (request_body TEXT)")
 
+        self.offloader = OffloadService(self)
+        if async_interval != None:
+            self.offloader.start()
     def add_request(self, body):
         """
         Add a new request to the stack of requests to be sent to the server
@@ -40,6 +43,9 @@ class POSTCache:
         """
         self.cache_c.execute("INSERT into postcache VALUES (?)", [body])
         self.cache_conn.commit()
+        if self.async_interval == None:
+            self.offloader.flush_cache()
+
     class OffloadService(threading.Thread):
         def __init__(self, post_cache):
             threading.Thread.__init__(self)
@@ -55,6 +61,7 @@ class POSTCache:
                 max_row_id = rows[0][0]
                 payload = {}
                 payload.update(post_cache.top_level_attributes)
+                payload["lines"] = [json.loads(row[1]) for row in rows]
                 try:
                     r = requests.post(post_cache.http_endpoint, json = payload)
                     self.cache_c.execute("delete from postcache where ROWID <= ?", [max_row_id])
@@ -65,7 +72,7 @@ class POSTCache:
                     print e
         def run(self):
             while self.running:
+                flush_cache()
                 for i in range(post_cache.async_interval * 10):
                     if not self.running: return
                     time.sleep(.1)
-                    flush_cache()
