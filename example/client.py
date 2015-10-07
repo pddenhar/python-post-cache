@@ -1,8 +1,13 @@
 #!/usr/bin/python
-from postCache import POSTCache
+from postcache import POSTCache
 import json, time
 
-cache = POSTCache("http://localhost:8080/tracking/api/gps", "cache.db", async_interval=10)
-
+#synchronous use of postcache
+cache = POSTCache("http://localhost:8080/tracking/api/gps", "cache.db")
 cache.add_request(json.dumps({"date": "now", "latitude":35}))
-time.sleep(20)
+time.sleep(2)
+
+#asynchronous use of postcache
+cache = POSTCache("http://localhost:8080/tracking/api/gps", "cache.db", async_interval=10)
+cache.add_request(json.dumps({"date": "now", "latitude":35}))
+time.sleep(15)
