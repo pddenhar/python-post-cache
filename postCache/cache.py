@@ -1,16 +1,16 @@
 import requests, json, threading
-import sqlite3
+import sqlite3, time
 
 class POSTCache:
-    def __init__(self, cache_path, http_endpoint, async_interval=None, top_level_attributes={}, upload_limit=500):
+    def __init__(self, http_endpoint, cache_path, async_interval=None, top_level_attributes={}, upload_limit=500):
         """
         Create a cache for POST requests.
 
         Args:
-            cache_path: path to the sqlite3 database cached requests will be stored in
             http_endpoint: the url requests should be sent to. This endpoint should
                 expect POST data with a "lines" attribute. "lines" will contain a list of the 
                 individual request bodies that were cached.
+            cache_path: path to the sqlite3 database cached requests will be stored in
             async_interval: If set, POSTCache will run a background thread to perform uploads
                 every <interval> seconds. If not set, uploads will only be attempted when a new 
                 request is added.
@@ -28,8 +28,8 @@ class POSTCache:
         self.cache_c = self.cache_conn.cursor()
         self.cache_c.execute("CREATE TABLE if not exists postcache (request_body TEXT)")
 
-        self.offloader = OffloadService(self)
-        if async_interval != None:
+        self.offloader = POSTCache.OffloadService(self)
+        if self.async_interval != None:
             self.offloader.start()
     def add_request(self, body):
         """
@@ -50,29 +50,35 @@ class POSTCache:
         def __init__(self, post_cache):
             threading.Thread.__init__(self)
             self.post_cache = post_cache
-            self.cache_conn = sqlite3.connect(post_cache.cache_path)
-            self.cache_c = self.cache_conn.cursor()
+            #use the parent object's cache cursor, will get replaced with a different one 
+            #if run is called
+            self.cache_c = self.post_cache.cache_c
+            self.cache_conn = self.post_cache.cache_conn
+
             self.running = True
+            self.parent = threading.current_thread()
         def flush_cache(self):
-            limit = post_cache.upload_limit
-            self.cache_c.execute("select ROWID, point from postcache ORDER BY ROWID DESC limit {0}".format(upload_limit))
-            rows = c.fetchall()
+            limit = self.post_cache.upload_limit
+            self.cache_c.execute("select ROWID, request_body from postcache ORDER BY ROWID ASC limit {0}".format(limit))
+            rows = self.cache_c.fetchall()
             if(len(rows) > 0):
                 max_row_id = rows[0][0]
                 payload = {}
-                payload.update(post_cache.top_level_attributes)
+                payload.update(self.post_cache.top_level_attributes)
                 payload["lines"] = [json.loads(row[1]) for row in rows]
                 try:
-                    r = requests.post(post_cache.http_endpoint, json = payload)
+                    r = requests.post(self.post_cache.http_endpoint, json = payload)
                     self.cache_c.execute("delete from postcache where ROWID <= ?", [max_row_id])
-                    conn.commit()
+                    self.cache_conn.commit()
                     if r.status_code != 200:
                         raise Exception("A server error occured({0}): {1}".format(r.status_code, r.text))
                 except Exception as e:
                     print e
         def run(self):
+            self.cache_conn = sqlite3.connect(self.post_cache.cache_path)
+            self.cache_c = self.cache_conn.cursor()
             while self.running:
-                flush_cache()
-                for i in range(post_cache.async_interval * 10):
-                    if not self.running: return
+                self.flush_cache()
+                for i in range(self.post_cache.async_interval * 10):
+                    if not (self.running and self.parent.is_alive()) : return
                     time.sleep(.1)
