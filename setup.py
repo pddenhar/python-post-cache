@@ -3,7 +3,7 @@ from setuptools import setup
 
 setup(
   name = "postcache",
-  version = "0.1.2",
+  version = "0.1.3",
   description = """A Python library to cache data that is being 
 POSTed to a remote server in the JSON format (such as periodic log items 
 or measurements.""",
