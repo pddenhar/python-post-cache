@@ -36,7 +36,7 @@ class POSTCache:
         self.offloader = POSTCache.OffloadService(self)
         if self.async_interval != None and self.http_endpoint != None:
             self.offloader.start()
-    def add_request(self, body):
+    def add_request(self, body, **kwargs):
         """
         Add a new request to the stack of requests to be sent to the server
         If async_interval is not set, this request (and any cached ones) 
@@ -44,9 +44,10 @@ class POSTCache:
         and sent out after <interval>
 
         Args:
-            body: JSON string to be included as the data in the post request
+            body: JSON serializable object to be included as the data in the post request
+            kwargs: Will be passed to json.dumps, see Python's JSON documentation for more details
         """
-        self.cache_c.execute("INSERT into postcache VALUES (?)", [body])
+        self.cache_c.execute("INSERT into postcache VALUES (?)", [json.dumps(body, **kwargs)])
         self.cache_conn.commit()
         if self.async_interval == None and self.http_endpoint != None:
             self.offloader.flush_cache()
